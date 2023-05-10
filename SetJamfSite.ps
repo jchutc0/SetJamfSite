@@ -2,11 +2,11 @@ param (
     [string] $userName,
     [string] $url,
     [switch] $computers,
-    [switch] $mobile,
-    [switch] $debug
+    [switch] $mobile
+    ## [switch] $debug
 )
 
-Set-Variable -Name "debugMode" - value $debug -scope global -option Read-Only 
+## Set-Variable -Name "debugMode" - value $debug -scope global -option Read-Only 
 
 function Debug() {
     $mode = Get-Variable -Name "debugMode"
@@ -162,7 +162,7 @@ if ($computers) {
     Write-Host 'Computers found:' $computerList.Length
     $computerList | foreach {
         $computer = Get-Computer $token $url $_.id
-        $computerStr = 'Computer: ' + $computer.general.name + ' // Site: ' + $computer.general.site.name + ' //'
+        $computerStr = 'Computer: (id) ' + $_.id + ' (name) ' + $computer.general.name + ' (site) ' + $computer.general.site.name
         if ($computer.general.site.name -ne ($computer.extension_attributes | where name -eq 'Jamf Site').value) {
             Write-Host $computerStr '(update)'
             Set-Computer $token $url $_.id $computer.general.site.name
@@ -177,7 +177,7 @@ if ($mobile) {
     Write-Host 'Mobile Devices found:' $mobileList.Length
     $mobileList | foreach {
         $device = Get-Mobile $token $url $_.id
-        $deviceStr = 'Mobile Device: ' + $device.general.name + ' // Site: ' + $device.general.site.name + ' //'
+        $deviceStr = 'Mobile Device: (id) ' + $_.id + ' (name) ' + $device.general.name + ' (site) ' + $device.general.site.name
         if ($device.general.site.name -ne ($device.extension_attributes | where name -eq 'Jamf Site').value) {
             Write-Host $deviceStr '(update)'
             Set-Mobile $token $url $_.id $device.general.site.name
