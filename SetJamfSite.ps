@@ -1,0 +1,188 @@
+param (
+    [string] $userName,
+    [string] $url,
+    [switch] $computers,
+    [switch] $mobile,
+    [switch] $debug
+)
+
+Set-Variable -Name "debugMode" - value $debug -scope global -option Read-Only 
+
+function Debug() {
+    $mode = Get-Variable -Name "debugMode"
+    if ($mode) {
+        # Write-Host 
+    }
+}
+
+function Get-Auth() {
+    param (
+        [string] $userName,
+        [string] $url
+    )
+    $creds = Get-Credential -UserName $userName
+    $call = Invoke-RestMethod -Method 'Post' -Credential $creds -Authentication Basic -Uri "$url/api/v1/auth/token"
+    $call
+    return $call.token
+}
+
+function Get-ComputerList() {
+    param (
+        [string] $token,
+        [string] $url
+    )
+    $headers = @{ 'accept' = 'application/json' }
+    $secureToken = ConvertTo-SecureString $token -AsPlainText
+
+    $call = Invoke-RestMethod `
+        -Method 'Get' `
+        -Authentication 'Bearer' `
+        -Token $secureToken `
+        -Headers $headers `
+        -Uri "$url/JSSResource/computers"
+    return $call.computers
+}
+
+function Get-Computer() {
+    param (
+        [string] $token,
+        [string] $url,
+        [string] $id
+    )
+    $headers = @{ 'accept' = 'application/json' }
+    $secureToken = ConvertTo-SecureString $token -AsPlainText
+
+    $call = Invoke-RestMethod `
+        -Method 'Get' `
+        -Authentication 'Bearer' `
+        -Token $secureToken `
+        -Headers $headers `
+        -Uri "$url/JSSResource/computers/id/$id"
+    return $call.computer
+}
+
+function Set-Computer() {
+    param (
+        [string] $token,
+        [string] $url,
+        [string] $id,
+        [string] $site
+    )
+    $headers = @{ 'accept' = 'application/json' }
+    $secureToken = ConvertTo-SecureString $token -AsPlainText
+    $escapedSite = [System.Security.SecurityElement]::Escape($site)
+    $body = "
+    <computer>
+        <extension_attributes>
+            <extension_attribute>
+                <name>Jamf Site</name>
+                <value>$escapedSite</value>
+            </extension_attribute>
+        </extension_attributes>
+    </computer>
+    "
+    $nill = Invoke-RestMethod `
+        -Method 'Put' `
+        -Body $body `
+        -Authentication 'Bearer' `
+        -Token $secureToken `
+        -Headers $headers `
+        -Uri "$url/JSSResource/computers/id/$id"
+}
+
+function Get-MobileList() {
+    param (
+        [string] $token,
+        [string] $url
+    )
+    $headers = @{ 'accept' = 'application/json' }
+    $secureToken = ConvertTo-SecureString $token -AsPlainText
+
+    $call = Invoke-RestMethod `
+        -Method 'Get' `
+        -Authentication 'Bearer' `
+        -Token $secureToken `
+        -Headers $headers `
+        -Uri "$url/JSSResource/mobiledevices"
+    return $call.mobile_devices
+}
+
+function Get-Mobile() {
+    param (
+        [string] $token,
+        [string] $url,
+        [string] $id
+    )
+    $headers = @{ 'accept' = 'application/json' }
+    $secureToken = ConvertTo-SecureString $token -AsPlainText
+
+    $call = Invoke-RestMethod `
+        -Method 'Get' `
+        -Authentication 'Bearer' `
+        -Token $secureToken `
+        -Headers $headers `
+        -Uri "$url/JSSResource/mobiledevices/id/$id"
+    return $call.mobile_device
+}
+
+function Set-Mobile() {
+    param (
+        [string] $token,
+        [string] $url,
+        [string] $id,
+        [string] $site
+    )
+    $headers = @{ 'accept' = 'application/json' }
+    $secureToken = ConvertTo-SecureString $token -AsPlainText
+    $escapedSite = [System.Security.SecurityElement]::Escape($site)
+    $body = "
+    <mobile_device>
+        <extension_attributes>
+            <extension_attribute>
+                <name>Jamf Site</name>
+                <value>$escapedSite</value>
+            </extension_attribute>
+        </extension_attributes>
+    </mobile_device>
+    "
+    $nill = Invoke-RestMethod `
+        -Method 'Put' `
+        -Body $body `
+        -Authentication 'Bearer' `
+        -Token $secureToken `
+        -Headers $headers `
+        -Uri "$url/JSSResource/mobiledevices/id/$id"
+}
+
+$token = Get-Auth $userName $url
+"Token: $token"
+
+if ($computers) {
+    $computerList = Get-ComputerList $token $url
+    Write-Host 'Computers found:' $computerList.Length
+    $computerList | foreach {
+        $computer = Get-Computer $token $url $_.id
+        $computerStr = 'Computer: ' + $computer.general.name + ' // Site: ' + $computer.general.site.name + ' //'
+        if ($computer.general.site.name -ne ($computer.extension_attributes | where name -eq 'Jamf Site').value) {
+            Write-Host $computerStr '(update)'
+            Set-Computer $token $url $_.id $computer.general.site.name
+        } else {
+            Write-Host $computerStr '(correct)'
+        }
+    }
+}
+
+if ($mobile) {
+    $mobileList = Get-MobileList $token $url
+    Write-Host 'Mobile Devices found:' $mobileList.Length
+    $mobileList | foreach {
+        $device = Get-Mobile $token $url $_.id
+        $deviceStr = 'Mobile Device: ' + $device.general.name + ' // Site: ' + $device.general.site.name + ' //'
+        if ($device.general.site.name -ne ($device.extension_attributes | where name -eq 'Jamf Site').value) {
+            Write-Host $deviceStr '(update)'
+            Set-Mobile $token $url $_.id $device.general.site.name
+        } else {
+            Write-Host $deviceStr '(correct)'
+        }
+    }
+}
